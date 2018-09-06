@@ -652,7 +652,7 @@ describe("List", () => {
         }),
         { numRuns: 25, examples: [[1089, 273], [1089, 1089]] }
       );
-  });
+    });
   });
   describe("map", () => {
     it("maps function over list", () => {
@@ -1824,6 +1824,94 @@ describe("List", () => {
     });
     it("returns false for non-empty list", () => {
       assert.isFalse(L.isEmpty(L.list(0, 1, 2, 3)));
+    });
+  });
+
+  describe("fuzzer", () => {
+    const testsToRun = 2000;
+    const opsToRun = 64;
+    const randomArrayMaxLength = 256;
+    const getRandomArray = () => {
+      const ar = [];
+      for (let i = 0; i < Math.random() * randomArrayMaxLength; i++) {
+        ar.push(i);
+      }
+      return ar;
+    };
+    const getRandomVal = () => Math.round(Math.random() * randomArrayMaxLength);
+    const fuzOps: (() => [
+      string,
+      (x: List<number>) => List<number>,
+      (x: number[]) => number[]
+    ])[] = [
+      () => {
+        const arr = getRandomArray();
+        return [
+          "prepend " + arr.length,
+          s => L.concat(L.from(arr), s),
+          s => [...arr, ...s]
+        ];
+      },
+      () => ["reverse", s => L.reverse(s), s => s.reverse()],
+      () => {
+        const arr = getRandomArray();
+        return [
+          "append " + arr.length,
+          s => L.concat(s, L.from(arr)),
+          s => [...s, ...arr]
+        ];
+      },
+      () => {
+        const count = getRandomVal();
+        return ["take " + count, s => L.take(count, s), s => s.slice(0, count)];
+      },
+      () => {
+        const count = getRandomVal();
+        return ["drop " + count, s => L.drop(count, s), s => s.slice(count)];
+      },
+      () => ["map *2", s => L.map(x => x * 2, s), s => s.map(x => x * 2)],
+      () => {
+        const val = getRandomVal();
+        return [
+          "filter >=" + val,
+          s => L.filter(x => x >= val, s),
+          s => <any>s.filter(x => x >= val)
+        ];
+      }
+    ];
+    it("should pass the fuzzer", () => {
+      for (let testIdx = 0; testIdx < testsToRun; testIdx++) {
+        let list: List<number> = L.list<number>();
+        let ar: number[] = [];
+        const ops: string[] = [];
+        for (let opIdx = 0; opIdx < opsToRun; opIdx++) {
+          const opIdx = Math.round(Math.random() * (fuzOps.length - 1));
+          const [opDesc, opFn, arOpFn] = fuzOps[opIdx]();
+          ops.push(opDesc);
+
+          const previousListAr = list.toArray();
+          const previousList = list;
+          try {
+            list = opFn(list);
+            ar = arOpFn(ar);
+          } catch (ex) {
+            console.error("*** got exception");
+            console.error(ops);
+            throw ex;
+          }
+          if (previousList.toArray().toString() !== previousListAr.toString()) {
+            console.error("*** BUG previous list was modified");
+            console.error(ops);
+            assert.deepEqual(previousListAr, previousList.toArray());
+          }
+
+          if (L.toArray(list).toString() !== ar.toString()) {
+            console.error("*** list BUG");
+            console.error(ops);
+            assert.deepEqual(list.toArray(), ar);
+          }
+        }
+      }
     });
   });
 });
